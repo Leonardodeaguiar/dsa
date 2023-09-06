@@ -1,0 +1,112 @@
+# Data science Academy
+# Microsoft power bi
+# Lab 8 - Detecção de animalias em transações financeiras com R
+
+# Verifica pasta de trabalho
+getwd()
+
+# Instala os pacotes
+install.packages("tidyverse")
+install.packages("dplyr")
+install.packages("solitude")
+install.packages("ggplot2")
+install.packages("readr")
+
+# Carrega os pacotes nesta sessão
+library(tidyverse)
+library(dplyr)
+library(solitude)
+library(ggplot2)
+library(readr)
+
+
+# Carga dos dados históricos
+dados_historicos_dsa <- read.csv("dados_historicos.csv")
+View(dados_historicos_dsa)
+
+# Cria o modelo de ML com algoritmo isolationForest
+?isolationForest
+modelo_ml_dsa = isolationForest$new()
+
+# Treina o modelo
+modelo_ml_dsa$fit(dados_historicos_dsa)
+
+# Faz as previsões do modelo usando dados historicos
+previsoes_historico = dados_historicos_dsa %>%
+  modelo_ml_dsa$predict() %>%
+  arrange(desc(anomaly_score))
+
+# Density plot
+plot(density(previsoes_historico$anomaly_score))
+
+# Quanto maior o anomaly score maior a chance de ser anomala a transação
+# vamos definir como regra que acima de .62 é uma anomalia
+indices_historico = previsoes_historico[which(previsoes_historico$anomaly_score > .62)]
+
+# Faz o filtro
+anomalias_historico = dados_historicos_dsa[indices_historico$id, ]
+normais_historico = dados_historicos_dsa[-indices_historico$id, ]
+
+# Grafico
+colors()
+ggplot() +
+  geom_point(data = normais_historico,
+             mapping = aes(transacao1, transacao2),
+             col = "skyblue3",
+             alpha = .5) +
+  geom_point(data = anomalias_historico,
+             mapping = aes(transacao1, transacao2),
+             col = "red2",
+             alpha = .8)
+
+# Agora carregamos os novos dados
+novos_dados_dsa <- read.csv("novos_dados.csv")
+view(novos_dados_dsa)
+
+# previsões com o modelo treinado
+previsoes_novos_dados = modelo_ml_dsa$predict(novos_dados_dsa)
+
+# se o anomaly score for maior que .63 consideramos como anomalia
+indices_novos_dados = previsoes_novos_dados[which(previsoes_novos_dados$anomaly_score > .63)]
+
+# Filtro
+anomalias_novos_dados = novos_dados_dsa[indices_novos_dados$id, ]
+normais_novos_dados = novos_dados_dsa[-indices_novos_dados$id, ]
+
+# Grafico
+colors()
+ggplot() +
+  geom_point(data = normais_novos_dados,
+             mapping = aes(transacao1, transacao2),
+             col = "skyblue3",
+             alpha = .5) +
+  geom_point(data = anomalias_novos_dados,
+             mapping = aes(transacao1, transacao2),
+             col = "red2",
+             alpha = .8)
+
+# Arredondando coluna para duas casas
+previsoes_novos_dados <- previsoes_novos_dados %>%
+  mutate(anomaly_score = round(anomaly_score, 2))
+
+# Criando uma nova coluna com base em condição
+previsoes_novos_dados <- previsoes_novos_dados%>%
+  mutate(status = ifelse(anomaly_score > .63, "anomalia", "normal"))
+
+library(ggplot2)
+
+# Criando o box plot
+ggplot(previsoes_novos_dados, aes( x = status, y = anomaly_score, fill=status)) +
+  geom_boxplot() +
+  labs(
+    title = "Box Plot de Anomalias e Normais",
+    x = "Status",
+    y = "Anomaly Score"
+  ) + theme_minimal() +
+  scale_fill_manual(values = c("anomalia" = "red", "normal" =  "blue")) +
+  theme(legend.position = "none")
+
+# Escreve o csv
+
+write.csv(previsoes_novos_dados, "previsoescomnovosdados.csv")
+
